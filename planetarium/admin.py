@@ -6,7 +6,7 @@ from planetarium.models import (
     PlanetariumDome,
     ShowSession,
     Reservation,
-    Ticket
+    Ticket,
 )
 
 admin.site.register(AstronomyShow)
