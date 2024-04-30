@@ -1,4 +1,8 @@
+import os
+import uuid
+
 from django.db import models
+from django.utils.text import slugify
 from rest_framework.exceptions import ValidationError
 
 from planetarium_api_service import settings
@@ -11,10 +15,18 @@ class ShowTheme(models.Model):
         return self.name
 
 
+def astronomy_show_image_path(instance, filename):
+    _, extension = os.path.splitext(filename)
+    filename = f"{slugify(instance.title)}-{uuid.uuid4()}{extension}"
+
+    return os.path.join("uploads/astronomy_show/", filename)
+
+
 class AstronomyShow(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
     show_theme = models.ManyToManyField(ShowTheme, blank=True)
+    image = models.ImageField(null=True, upload_to=astronomy_show_image_path)
 
     def __str__(self):
         return self.title

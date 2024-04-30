@@ -1,7 +1,10 @@
 from datetime import datetime
 
 from django.db.models import F, Count
-from rest_framework import viewsets
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser
+from rest_framework.response import Response
 
 from planetarium.models import (
     AstronomyShow,
@@ -20,7 +23,7 @@ from planetarium.serializers import (
     AstronomyShowDetailSerializer,
     ShowSessionListSerializer,
     ShowSessionDetailSerializer,
-    ReservationListSerializer
+    ReservationListSerializer, AstronomyShowImageSerializer
 )
 
 
@@ -56,7 +59,25 @@ class AstronomyShowViewSet(viewsets.ModelViewSet):
         if self.action == "retrieve":
             return AstronomyShowDetailSerializer
 
+        if self.action == "upload_image":
+            return AstronomyShowImageSerializer
+
         return AstronomyShowSerializer
+
+    @action(
+        methods=["POST"],
+        detail=True,
+        url_path="upload-image",
+        permission_classes=[IsAdminUser],
+    )
+    def upload_image(self, request, pk=None):
+        """endpoint for uploading image"""
+        astronomy_show = self.get_object()
+        serializer = self.get_serializer(astronomy_show, data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 class ShowThemeViewSet(viewsets.ModelViewSet):
