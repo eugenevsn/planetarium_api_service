@@ -6,13 +6,14 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APITestCase
 
 from planetarium.models import AstronomyShow, PlanetariumDome, ShowSession, ShowTheme
 from planetarium.serializers import (
     AstronomyShowListSerializer,
     AstronomyShowDetailSerializer,
 )
+from user.models import User
 
 ASTRONOMY_SHOW_URL = reverse("planetarium:astronomyshow-list")
 SHOW_SESSION_URL = reverse("planetarium:showsession-list")
@@ -25,7 +26,9 @@ def create_sample_astronomy_show(**params):
 
 
 def create_sample_show_session(**params):
-    planetarium_dome = PlanetariumDome.objects.create(name="Blue", rows=20, seats_in_row=20)
+    planetarium_dome = PlanetariumDome.objects.create(
+        name="Blue", rows=20, seats_in_row=20
+    )
     defaults = {
         "show_time": "2022-06-02 14:00:00",
         "astronomy_show": None,
@@ -74,16 +77,24 @@ class AuthenticatedAstronomyShowApiTests(TestCase):
         astronomy_show2 = create_sample_astronomy_show(title="Astronomy Show 2")
         astronomy_show1.show_theme.add(show_theme1)
         astronomy_show2.show_theme.add(show_theme2)
-        astronomy_show3 = create_sample_astronomy_show(title="Astronomy show without show themes")
+        astronomy_show3 = create_sample_astronomy_show(
+            title="Astronomy show without show themes"
+        )
         res = self.client.get(
             ASTRONOMY_SHOW_URL, {"show_theme": f"{show_theme1.id},{show_theme2.id}"}
         )
         serializer1 = AstronomyShowListSerializer(astronomy_show1)
         serializer2 = AstronomyShowListSerializer(astronomy_show2)
         serializer3 = AstronomyShowListSerializer(astronomy_show3)
-        self.assertIn(str(serializer1.data), [str(item) for item in res.data["results"]])
-        self.assertIn(str(serializer2.data), [str(item) for item in res.data["results"]])
-        self.assertNotIn(str(serializer3.data), [str(item) for item in res.data["results"]])
+        self.assertIn(
+            str(serializer1.data), [str(item) for item in res.data["results"]]
+        )
+        self.assertIn(
+            str(serializer2.data), [str(item) for item in res.data["results"]]
+        )
+        self.assertNotIn(
+            str(serializer3.data), [str(item) for item in res.data["results"]]
+        )
 
     def test_filter_astronomy_shows_by_title(self):
         astronomy_show1 = create_sample_astronomy_show(title="Astronomy Show")
@@ -107,7 +118,9 @@ class AuthenticatedAstronomyShowApiTests(TestCase):
 class AdminAstronomyShowApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = get_user_model().objects.create_user("admin@admin.com", "testpass", is_staff=True)
+        self.user = get_user_model().objects.create_user(
+            "admin@admin.com", "testpass", is_staff=True
+        )
         self.client.force_authenticate(self.user)
 
     def test_create_astronomy_show(self):
@@ -150,10 +163,14 @@ class AdminAstronomyShowApiTests(TestCase):
 class AstronomyShowImageUploadTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = get_user_model().objects.create_superuser("admin@myproject.com", "password")
+        self.user = get_user_model().objects.create_superuser(
+            "admin@myproject.com", "password"
+        )
         self.client.force_authenticate(self.user)
         self.astronomy_show = create_sample_astronomy_show()
-        self.show_session = create_sample_show_session(astronomy_show=self.astronomy_show)
+        self.show_session = create_sample_show_session(
+            astronomy_show=self.astronomy_show
+        )
 
     def tearDown(self):
         self.astronomy_show.image.delete()
@@ -212,3 +229,84 @@ class AstronomyShowImageUploadTests(TestCase):
         url = get_detail_url(astronomy_show.id)
         res = self.client.delete(url)
         self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class BaseAPITestCase(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_superuser(
+            "testuser@gmail.com", "12345"
+        )
+        self.client.force_authenticate(self.user)
+        self.astronomy_show = create_sample_astronomy_show()
+        self.show_session = create_sample_show_session(
+            astronomy_show=self.astronomy_show
+        )
+
+    def assert_list_endpoint(self, endpoint):
+        response = self.client.get(endpoint)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def assert_create_endpoint(self, endpoint, data):
+        response = self.client.post(endpoint, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def assert_retrieve_endpoint(self, endpoint):
+        response = self.client.get(endpoint)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class ShowThemeViewSetTests(BaseAPITestCase):
+    def test_list_show_themes(self):
+        self.assert_list_endpoint("/api/planetarium/show-theme/")
+
+    def test_create_show_theme(self):
+        data = {"name": "New Theme"}
+        self.assert_create_endpoint("/api/planetarium/show-theme/", data)
+
+
+class AstronomyShowViewSetTests(BaseAPITestCase):
+    def test_list_astronomy_shows(self):
+        self.assert_list_endpoint("/api/planetarium/astronomy-show/")
+
+    def test_create_astronomy_show(self):
+        data = {"title": "New Show", "description": "Description"}
+        self.assert_create_endpoint("/api/planetarium/astronomy-show/", data)
+
+    def test_retrieve_astronomy_show(self):
+        show_id = 1
+        self.assert_retrieve_endpoint(f"/api/planetarium/astronomy-show/{show_id}/")
+
+
+class PlanetariumDomeViewSetTests(BaseAPITestCase):
+    def test_list_planetarium_domes(self):
+        self.assert_list_endpoint("/api/planetarium/planetarium-dome/")
+
+    def test_create_planetarium_dome(self):
+        data = {"name": "New Dome", "rows": 10, "seats_in_row": 20}
+        self.assert_create_endpoint("/api/planetarium/planetarium-dome/", data)
+
+
+class ShowSessionViewSetTests(BaseAPITestCase):
+    def test_list_show_sessions(self):
+        self.assert_list_endpoint("/api/planetarium/show-session/")
+
+    def test_create_show_session(self):
+        data = {
+            "astronomy_show": 1,
+            "planetarium_dome": 1,
+            "show_time": "2024-05-10T12:00:00",
+        }
+        self.assert_create_endpoint("/api/planetarium/show-session/", data)
+
+
+class ReservationViewSetTests(BaseAPITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_superuser(
+            "testuser2@gmail.com", "123456"
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_list_reservations(self):
+        self.assert_list_endpoint("/api/planetarium/reservation/")
